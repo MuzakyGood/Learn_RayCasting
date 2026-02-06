@@ -44,7 +44,7 @@ int main(void)
     const int WIDTH_SCREEN = 800;
     const int HEIGHT_SCREEN = 600;
 
-    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "First Ray Casting 2D - Zach Noland");
+    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "First Ray Casting 2D - By Zach Noland");
 
     Player player = (Player)
     {

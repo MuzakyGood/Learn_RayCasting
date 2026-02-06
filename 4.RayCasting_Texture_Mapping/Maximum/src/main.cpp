@@ -1,6 +1,8 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#include "include/File.hpp" // Include header for function File::getPathFile();
+
 // #define RAY_STEP (5)
 #define RAY_STEP (1)
 // #define RAY_COUNT (60)
@@ -11,15 +13,6 @@
 #define GET_CENTER(POS) CLITERAL(POS / 2.0f)
 #define GET_CENTER_X_TEXT(TEXT, SIZE) CLITERAL(GET_CENTER((GetScreenWidth() - MeasureText(TEXT, SIZE))))
 #define GET_CENTER_Y_TEXT CLITERAL(GET_CENTER(GetScreenHeight()))
-
-// Ray Casting Render Mode
-typedef enum RenderMode
-{
-    // Ray Casting mode render rectangle (default)
-    MODE_RECT,
-    // Ray Casting mode render vertical line (Wolf3D)
-    MODE_LINE
-} RenderMode;
 
 typedef struct Player
 {
@@ -37,6 +30,7 @@ typedef struct Player
 typedef struct Wall
 {
     Rectangle component;
+    Texture texture;
     Color color;
 } Wall;
 
@@ -53,6 +47,21 @@ typedef struct Render
     Vector2 vec;
 } Render;
 
+typedef struct RenderTextureMapping
+{
+    float dxLeft;
+    float dxRight;
+    float dyTop;
+    float dyBottom;
+    float minX;
+    float minY;
+    float hitX;
+    Rectangle src;
+    Rectangle dst;
+    int texX;
+    bool hitVertical;
+} RenderTextureMapping;
+
 namespace Game
 {
     Player control(Player player);
@@ -62,7 +71,7 @@ namespace Game
 namespace RayCasting
 {
     void render2D(Player player, Render render, Wall wall);
-    void render3D(Player player, Render render, Wall wall, RenderMode mode);
+    void render3D(Player player, Render render, RenderTextureMapping texMap, Wall wall);
 }
 
 int main(void)
@@ -70,7 +79,7 @@ int main(void)
     const int WIDTH_SCREEN = 800;
     const int HEIGHT_SCREEN = 600;
 
-    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "Ray Casting 2D & 3D - By Zach Noland");
+    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "Ray Casting Texture Mapping - By Zach Noland");
 
     Player player = (Player)
     {
@@ -88,22 +97,21 @@ int main(void)
         {
             .x = 500, 
             .y = 150, 
-            .width = 100, 
-            .height = 150 
+            .width = 64, 
+            .height = 64 
         },
-        .color = GRAY
+        .texture = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false)),
+        .color = WHITE
     };
 
     Wall wall2D = (Wall)
     {
         .component = wall3D.component,
-        .color = GRAY
+        .color = DARKGRAY
     };
 
     Render render;
-    RenderMode mode = MODE_RECT;
-    // Variable toggle render mode
-    bool toggleRenderMode = false;
+    RenderTextureMapping texMap;
     // Variable toggle map view
     bool toggleMap = false;
 
@@ -120,21 +128,21 @@ int main(void)
         // Player collision
         player = Game::collision(player, wall2D, oldPosPlayer);
 
-        // Toggle render mode (Press N)
-        if (IsKeyPressed(KEY_N)) toggleRenderMode = !toggleRenderMode;
-
-        // Logic change mode render
-        if (toggleRenderMode) mode = MODE_LINE;
-        else mode = MODE_RECT;
-
         // Toggle 2d map view (Press M)
         if (IsKeyPressed(KEY_M)) toggleMap = !toggleMap;
 
         BeginDrawing();
-        ClearBackground(BLACK);
+		// Add gradient color for floor and roof
+        DrawRectangleGradientV(
+            0, 0, 
+            GetScreenWidth(), 
+            GetScreenHeight(), 
+            (Color){130, 130, 130, 255}, 
+            (Color){35, 35, 35, 255}
+        );
 
         // DRAW 3D VIEW
-        RayCasting::render3D(player, render, wall3D, mode);
+        RayCasting::render3D(player, render, texMap, wall3D);
 
         // Logic toggle render
         if (toggleMap) 
@@ -166,6 +174,8 @@ int main(void)
 
         EndDrawing();
     }
+
+    UnloadTexture(wall3D.texture);
 
     CloseWindow();
     return 0;
@@ -236,7 +246,7 @@ void RayCasting::render2D(Player player, Render render, Wall wall)
     DrawCircleV(player.position, 6, player.mainColor);
 }
 
-void RayCasting::render3D(Player player, Render render, Wall wall, RenderMode mode)
+void RayCasting::render3D(Player player, Render render, RenderTextureMapping texMap, Wall wall)
 {
     for (int i = 0; i < RAY_COUNT; ++i)
     {
@@ -270,31 +280,53 @@ void RayCasting::render3D(Player player, Render render, Wall wall, RenderMode mo
             render.vec.x = i * (static_cast<float>(GetScreenWidth()) / static_cast<float>(RAY_COUNT));
             render.vec.y = (static_cast<float>(GetScreenHeight()) / 2) - (render.wallHeight / 2);
 
-            // Toggle mode render
-            switch (mode)
-            {
-            // Rectangle line mode
-            case MODE_RECT:
-                DrawRectangle(
-                    render.vec.x, 
-                    render.vec.y,
-                    (GetScreenWidth() / RAY_COUNT) + 1,
-                    render.wallHeight,
-                    wall.color
-                );
-                break;
+            // ==== Texture Mapping =====
+
+            texMap.dxLeft   = fabsf(render.rayPos.x - wall.component.x);
+            texMap.dxRight  = fabsf(render.rayPos.x - (wall.component.x + wall.component.width));
+            texMap.dyTop    = fabsf(render.rayPos.y - wall.component.y);
+            texMap.dyBottom = fabsf(render.rayPos.y - (wall.component.y + wall.component.height));
+                    
+            texMap.minX = fminf(texMap.dxLeft, texMap.dxRight);
+            texMap.minY = fminf(texMap.dyTop, texMap.dyBottom);
+                    
+            texMap.hitVertical = (texMap.minX < texMap.minY);
+
+            // Wall left / right using Y
+            if (texMap.hitVertical) texMap.hitX = (render.rayPos.y - wall.component.y) / wall.component.height;
+            // Wall up / bottom using X
+            else texMap.hitX = (render.rayPos.x - wall.component.x) / wall.component.width;
+
+            if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = wall.texture.width - texMap.texX - 1;
+            if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = wall.texture.width - texMap.texX - 1;
             
-            // Vertical line mode
-            case MODE_LINE:
-                DrawLine(
-                    render.vec.x,
-                    render.vec.y,
-                    render.vec.x,
-                    render.vec.y + render.wallHeight,
-                    wall.color
-                );
-                break;
-            }
+            texMap.hitX = Clamp(texMap.hitX, 0.0f, 1.0f);
+            texMap.texX = static_cast<int>(texMap.hitX * wall.texture.width);
+
+            texMap.src = (Rectangle)
+            {
+                .x = static_cast<float>(texMap.texX), 
+                .y = 0,
+                .width = 1,
+                .height = static_cast<float>(wall.texture.height)
+            };
+
+            texMap.dst = (Rectangle)
+            {
+                .x = render.vec.x,
+                .y = render.vec.y,
+                .width = (static_cast<float>(GetScreenWidth()) / static_cast<float>(RAY_COUNT)) + 1,
+                .height = render.wallHeight
+            };
+
+            DrawTexturePro(
+                wall.texture,
+                texMap.src,
+                texMap.dst,
+                (Vector2) {0.0f, 0.0f},
+                0.0f,
+                wall.color
+            );
 
         }
     }
