@@ -102,7 +102,7 @@ int main(void)
         .color = WHITE
     };
     // Sparate brickGrayTex texture for save many memory in GPU
-    Texture brickGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
+    Texture brickDarkGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
     // If you want texture bilinear vibes
     // SetTextureFilter(brickGrayTex, TEXTURE_FILTER_BILINEAR);
 
@@ -144,7 +144,7 @@ int main(void)
         );
 
         // DRAW 3D VIEW
-        RayCasting::render3D(player, render, texMap, brickGrayTex, wall3D);
+        RayCasting::render3D(player, render, texMap, brickDarkGrayTex, wall3D);
 
         // Logic toggle render
         if (toggleMap) 
@@ -178,7 +178,7 @@ int main(void)
     }
 
     // Unload brickGray texture
-    UnloadTexture(brickGrayTex);
+    UnloadTexture(brickDarkGrayTex);
 
     CloseWindow();
     return 0;
@@ -299,12 +299,13 @@ void RayCasting::render3D(Player player, Render render, RenderTextureMapping tex
             if (texMap.hitVertical) texMap.hitX = (render.rayPos.y - wall.component.y) / wall.component.height;
             // Wall up / bottom using X
             else texMap.hitX = (render.rayPos.x - wall.component.x) / wall.component.width;
-
-            if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = texWall.width - texMap.texX - 1;
-            if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = texWall.width - texMap.texX - 1;
             
             texMap.hitX = Clamp(texMap.hitX, 0.0f, 1.0f);
             texMap.texX = static_cast<int>(texMap.hitX * texWall.width);
+
+            // Flip texture
+            if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = texWall.width - texMap.texX - 1;
+            if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = texWall.width - texMap.texX - 1;
 
             texMap.src = (Rectangle)
             {
