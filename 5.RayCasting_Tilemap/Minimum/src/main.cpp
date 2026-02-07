@@ -28,12 +28,6 @@ typedef struct Player
     Rectangle rect;
 } Player;
 
-typedef struct Wall
-{
-    Rectangle component;
-    Color color;
-} Wall;
-
 typedef struct Render
 {
     Vector2 rayPos;
@@ -77,7 +71,14 @@ namespace Game
     Player collision(Player player, Vector2 oldPosPlayer);
 }
 
-// Multidimensional array world map
+/*
+# WORLD MAP - 01
+Data worldMap id:
+[0] floor
+[1] brick_gray
+[2] brick_dark_gray
+[3] brick_dark_blue
+*/
 std::array<std::array<int, TILE_WIDTH>, TILE_HEIGHT> worldMap = {{
     {2, 2, 2, 2, 2, 3, 3, 3, 3, 3},
     {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
@@ -133,6 +134,8 @@ int main(void)
         LoadTexture(File::getPathFile("assets/textures/brick/brick_darkblue.png", false))
     };
     // If you want texture bilinear vibes
+    // for (const auto& wall : wallTex) SetTextureFilter(wall, TEXTURE_FILTER_BILINEAR);
+
     // SetTextureFilter(brickGrayTex, TEXTURE_FILTER_BILINEAR);
     // Texture brickDarkGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
 
@@ -154,7 +157,7 @@ int main(void)
         player = Game::collision(player, oldPosPlayer);
 
         BeginDrawing();
-        // Add gradient color for floor and roof
+        // Add floor and ceil
         DrawRectangle(
             0, 
             0,
