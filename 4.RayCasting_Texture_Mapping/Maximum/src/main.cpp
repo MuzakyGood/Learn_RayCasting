@@ -30,7 +30,6 @@ typedef struct Player
 typedef struct Wall
 {
     Rectangle component;
-    Texture texture;
     Color color;
 } Wall;
 
@@ -71,7 +70,7 @@ namespace Game
 namespace RayCasting
 {
     void render2D(Player player, Render render, Wall wall);
-    void render3D(Player player, Render render, RenderTextureMapping texMap, Wall wall);
+    void render3D(Player player, Render render, RenderTextureMapping texMap, Texture texWall, Wall wall);
 }
 
 int main(void)
@@ -100,14 +99,17 @@ int main(void)
             .width = 64, 
             .height = 64 
         },
-        .texture = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false)),
         .color = WHITE
     };
+    // Sparate brickGrayTex texture for save many memory in GPU
+    Texture brickGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
+    // If you want texture bilinear vibes
+    // SetTextureFilter(brickGrayTex, TEXTURE_FILTER_BILINEAR);
 
     Wall wall2D = (Wall)
     {
         .component = wall3D.component,
-        .color = DARKGRAY
+        .color = GRAY
     };
 
     Render render;
@@ -142,7 +144,7 @@ int main(void)
         );
 
         // DRAW 3D VIEW
-        RayCasting::render3D(player, render, texMap, wall3D);
+        RayCasting::render3D(player, render, texMap, brickGrayTex, wall3D);
 
         // Logic toggle render
         if (toggleMap) 
@@ -175,7 +177,8 @@ int main(void)
         EndDrawing();
     }
 
-    UnloadTexture(wall3D.texture);
+    // Unload brickGray texture
+    UnloadTexture(brickGrayTex);
 
     CloseWindow();
     return 0;
@@ -246,7 +249,7 @@ void RayCasting::render2D(Player player, Render render, Wall wall)
     DrawCircleV(player.position, 6, player.mainColor);
 }
 
-void RayCasting::render3D(Player player, Render render, RenderTextureMapping texMap, Wall wall)
+void RayCasting::render3D(Player player, Render render, RenderTextureMapping texMap, Texture texWall, Wall wall)
 {
     for (int i = 0; i < RAY_COUNT; ++i)
     {
@@ -297,18 +300,18 @@ void RayCasting::render3D(Player player, Render render, RenderTextureMapping tex
             // Wall up / bottom using X
             else texMap.hitX = (render.rayPos.x - wall.component.x) / wall.component.width;
 
-            if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = wall.texture.width - texMap.texX - 1;
-            if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = wall.texture.width - texMap.texX - 1;
+            if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = texWall.width - texMap.texX - 1;
+            if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = texWall.width - texMap.texX - 1;
             
             texMap.hitX = Clamp(texMap.hitX, 0.0f, 1.0f);
-            texMap.texX = static_cast<int>(texMap.hitX * wall.texture.width);
+            texMap.texX = static_cast<int>(texMap.hitX * texWall.width);
 
             texMap.src = (Rectangle)
             {
                 .x = static_cast<float>(texMap.texX), 
                 .y = 0,
                 .width = 1,
-                .height = static_cast<float>(wall.texture.height)
+                .height = static_cast<float>(texWall.height)
             };
 
             texMap.dst = (Rectangle)
@@ -320,7 +323,7 @@ void RayCasting::render3D(Player player, Render render, RenderTextureMapping tex
             };
 
             DrawTexturePro(
-                wall.texture,
+                texWall,
                 texMap.src,
                 texMap.dst,
                 (Vector2) {0.0f, 0.0f},

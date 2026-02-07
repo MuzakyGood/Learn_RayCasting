@@ -25,7 +25,6 @@ typedef struct Player
 typedef struct Wall
 {
     Rectangle component;
-    Texture texture;
     Color color;
 } Wall;
 
@@ -87,9 +86,12 @@ int main(void)
             .width = 64, 
             .height = 64
         },
-        .texture = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false)),
         .color = WHITE
     };
+    // Sparate brickGrayTex texture for save many memory in GPU
+    Texture brickGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
+    // If you want texture bilinear vibes
+    // SetTextureFilter(brickGrayTex, TEXTURE_FILTER_BILINEAR);
 
     Render render;
     RenderTextureMapping texMap;
@@ -168,18 +170,18 @@ int main(void)
                 // Wall up / bottom using X
                 else texMap.hitX = (render.rayPos.x - wall.component.x) / wall.component.width;
 
-                if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = wall.texture.width - texMap.texX - 1;
-                if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = wall.texture.width - texMap.texX - 1;
+                if (!texMap.hitVertical && render.rayDir.y < 0) texMap.texX = brickGrayTex.width - texMap.texX - 1;
+                if (texMap.hitVertical && render.rayDir.x > 0) texMap.texX = brickGrayTex.width - texMap.texX - 1;
                 
                 texMap.hitX = Clamp(texMap.hitX, 0.0f, 1.0f);
-                texMap.texX = static_cast<int>(texMap.hitX * wall.texture.width);
+                texMap.texX = static_cast<int>(texMap.hitX * brickGrayTex.width);
 
                 texMap.src = (Rectangle)
                 {
                     .x = static_cast<float>(texMap.texX), 
                     .y = 0,
                     .width = 1,
-                    .height = static_cast<float>(wall.texture.height)
+                    .height = static_cast<float>(brickGrayTex.height)
                 };
 
                 texMap.dst = (Rectangle)
@@ -191,7 +193,7 @@ int main(void)
                 };
 
                 DrawTexturePro(
-                    wall.texture,
+                    brickGrayTex,
                     texMap.src,
                     texMap.dst,
                     (Vector2) {0.0f, 0.0f},
@@ -213,7 +215,7 @@ int main(void)
     }
 
     // Unload wall texture
-    UnloadTexture(wall.texture);
+    UnloadTexture(brickGrayTex);
 
     CloseWindow();
     return 0;
