@@ -55,12 +55,21 @@ typedef struct RenderTextureMapping
     // float dyBottom;
     // float minX;
     // float minY;
+    float dx;
+    float dy;
     float hitX;
     Rectangle src;
     Rectangle dst;
     int texX;
     bool hitVertical;
 } RenderTextureMapping;
+
+typedef struct Tilemap
+{
+    int mapX;
+    int mapY;
+    int hitTile;
+} Tilemap;
 
 namespace Game
 {
@@ -70,11 +79,11 @@ namespace Game
 
 // Multidimensional array world map
 std::array<std::array<int, TILE_WIDTH>, TILE_HEIGHT> worldMap = {{
-    {2, 2, 2, 2, 2, 1, 1, 1, 1, 1},
-    {2, 0, 0, 0, 2, 0, 0, 0, 0, 1},
-    {2, 0, 0, 0, 2, 0, 0, 0, 0, 1},
-    {2, 0, 0, 0, 2, 0, 0, 0, 0, 1},
-    {2, 2, 0, 2, 2, 0, 0, 0, 0, 1},
+    {2, 2, 2, 2, 2, 3, 3, 3, 3, 3},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
+    {2, 2, 0, 2, 2, 3, 3, 0, 3, 3},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
     {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
@@ -89,10 +98,18 @@ int main(void)
 
     InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "Ray Casting Texture Mappping - By Zach Noland");
 
+    // Set player spawn position based tile
+    int spawnX = 2;
+    int spawnY = 2;
+
     Player player = (Player)
     {
-        .position = (Vector2){GET_CENTER(GetScreenWidth()), GET_CENTER(GetScreenHeight())},
-        .angle = 0.0f,
+        .position = (Vector2)
+        {
+            .x = spawnX * TILE_SIZE + TILE_SIZE / 2.0f,
+            .y = spawnY * TILE_SIZE + TILE_SIZE / 2.0f
+        },
+        .angle = 1.0f,
         .speed = 3.0f,
         .rect = {0.0f, 0.0f, 0.0f, 0.0f}
     };
@@ -110,14 +127,16 @@ int main(void)
     // };
 
     // Sparate brickGrayTex texture for save many memory in GPU
-    std::array<Texture, 2> wallTex = {
+    std::array<Texture, 3> wallTex = {
         LoadTexture(File::getPathFile("assets/textures/brick/brick_gray.png", false)),
-        LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false))
+        LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false)),
+        LoadTexture(File::getPathFile("assets/textures/brick/brick_darkblue.png", false))
     };
     // If you want texture bilinear vibes
     // SetTextureFilter(brickGrayTex, TEXTURE_FILTER_BILINEAR);
     // Texture brickDarkGrayTex = LoadTexture(File::getPathFile("assets/textures/brick/brick_darkgray.png", false));
 
+    Tilemap map;
     Render render;
     RenderTextureMapping texMap;
 
@@ -175,7 +194,7 @@ int main(void)
             render.hit = false;
             texMap.hitVertical = false;
 
-            int hitTile = 0;
+            map.hitTile = 0;
 
             while (render.distance < RAY_LENGTH && !render.hit)
             {
@@ -183,25 +202,25 @@ int main(void)
                 render.rayPos.y += render.rayDir.y * RAY_STEP;
                 render.distance += RAY_STEP;
 
-                int mapX = render.rayPos.x / TILE_SIZE;
-                int mapY = render.rayPos.y / TILE_SIZE;
+                map.mapX = render.rayPos.x / TILE_SIZE;
+                map.mapY = render.rayPos.y / TILE_SIZE;
 
-                if (mapX < 0 || mapY < 0 || mapX >= TILE_WIDTH || mapY >= TILE_HEIGHT) break;
+                if (map.mapX < 0 || map.mapY < 0 || map.mapX >= TILE_WIDTH || map.mapY >= TILE_HEIGHT) break;
 
-                if (worldMap[mapY][mapX] > 0)
+                if (worldMap[map.mapY][map.mapX] > 0)
                 {
                     render.hit = true;
-                    hitTile = worldMap[mapY][mapX];
+                    map.hitTile = worldMap[map.mapY][map.mapX];
 
-                    float dx = fminf(
-                        fabsf(render.rayPos.x - mapX * TILE_SIZE),
-                        fabsf(render.rayPos.x - (mapX + 1) * TILE_SIZE)
+                    texMap.dx = fminf(
+                        fabsf(render.rayPos.x - map.mapX * TILE_SIZE),
+                        fabsf(render.rayPos.x - (map.mapX + 1) * TILE_SIZE)
                     );
-                    float dy = fminf(
-                        fabsf(render.rayPos.y - mapY * TILE_SIZE),
-                        fabsf(render.rayPos.y - (mapY + 1) * TILE_SIZE)
+                    texMap.dy = fminf(
+                        fabsf(render.rayPos.y - map.mapY * TILE_SIZE),
+                        fabsf(render.rayPos.y - (map.mapY + 1) * TILE_SIZE)
                     );
-                    texMap.hitVertical = dx < dy;
+                    texMap.hitVertical = texMap.dx < texMap.dy;
                 }
                 // if (CheckCollisionPointRec(render.rayPos, wall.component)) render.hit = true;
             }
@@ -218,7 +237,7 @@ int main(void)
 
                 // ==== Texture Mapping =====
 
-                Texture tex = wallTex[hitTile - 1];
+                Texture tex = wallTex[map.hitTile - 1];
 
                 texMap.hitX = texMap.hitVertical ? fmodf(render.rayPos.y, TILE_SIZE) / TILE_SIZE : fmodf(render.rayPos.x, TILE_SIZE) / TILE_SIZE;
 
@@ -272,10 +291,10 @@ int main(void)
         }
 
         DrawText(
-            "RENDER 3D MAP WITH TEXTURE VIEW",
-            GET_CENTER_X_TEXT("RENDER 3D MAP WITH TEXTURE VIEW", 15),
+            "RENDER 3D TILEDMAP",
+            GET_CENTER_X_TEXT("RENDER 3D TILEDMAP", 25),
             15,
-            15,
+            25,
             WHITE
         );
 
