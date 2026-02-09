@@ -1,7 +1,7 @@
 #include <raylib.h>
 #include <raymath.h>
 
-#include <array>
+#include <array> // Include header for tilemap
 
 #include "include/File.hpp" // Include header for function File::getPathFile();
 
@@ -11,17 +11,19 @@
 #define RAY_COUNT (240)
 #define RAY_LENGTH (1000)
 #define FOV (60 * DEG2RAD)
+#define MAX_DISTANCE (800.0f)
 
 #define GET_CENTER(POS) CLITERAL(POS / 2.0f)
 #define GET_CENTER_X_TEXT(TEXT, SIZE) CLITERAL(GET_CENTER((GetScreenWidth() - MeasureText(TEXT, SIZE))))
 #define GET_CENTER_Y_TEXT CLITERAL(GET_CENTER(GetScreenHeight()))
 
 #define TILE_SIZE (64)
-#define TILE_WIDTH (10)
+#define TILE_WIDTH (15)
 #define TILE_HEIGHT (10)
 
 typedef struct Player
 {
+    Vector2 spawn;
     Vector2 position;
     float angle;
     float speed;
@@ -50,6 +52,9 @@ typedef struct RenderTextureMapping
     Rectangle dst;
     int texX;
     bool hitVertical;
+
+    float shade;
+    Color wallColor;
 } RenderTextureMapping;
 
 typedef struct Tilemap
@@ -74,16 +79,16 @@ Data worldMap id:
 [3] brick_dark_blue
 */
 std::array<std::array<int, TILE_WIDTH>, TILE_HEIGHT> worldMap = {{
-    {2, 2, 2, 2, 2, 3, 3, 3, 3, 3},
-    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
-    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
-    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3},
-    {2, 2, 0, 2, 2, 3, 3, 0, 3, 3},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+    {2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3, 0, 0, 0, 0, 1},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3, 0, 0, 0, 0, 1},
+    {2, 0, 0, 0, 2, 3, 0, 0, 0, 3, 0, 0, 0, 0, 1},
+    {2, 2, 0, 2, 2, 3, 3, 0, 3, 3, 0, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 }};
 
 int main(void)
@@ -91,35 +96,24 @@ int main(void)
     const int WIDTH_SCREEN = 800;
     const int HEIGHT_SCREEN = 600;
 
-    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "Ray Casting Texture Mappping - By Zach Noland");
-
-    // Set player spawn position based tile
-    int spawnX = 2;
-    int spawnY = 2;
+    InitWindow(WIDTH_SCREEN, HEIGHT_SCREEN, "Ray Casting Shading Distance - By Zach Noland");
 
     Player player = (Player)
     {
+        .spawn = (Vector2)
+        {
+            .x = 2,
+            .y = 2
+        },
         .position = (Vector2)
         {
-            .x = spawnX * TILE_SIZE + TILE_SIZE / 2.0f,
-            .y = spawnY * TILE_SIZE + TILE_SIZE / 2.0f
+            .x = player.spawn.x * TILE_SIZE + TILE_SIZE / 2.0f,
+            .y = player.spawn.y * TILE_SIZE + TILE_SIZE / 2.0f
         },
         .angle = 1.0f,
         .speed = 3.0f,
         .rect = {0.0f, 0.0f, 0.0f, 0.0f}
     };
-
-    // Wall wall = (Wall)
-    // {
-    //     .component = (Rectangle)
-    //     { 
-    //         .x = 500, 
-    //         .y = 150, 
-    //         .width = 64, 
-    //         .height = 64
-    //     },
-    //     .color = WHITE
-    // };
 
     // Sparate brickGrayTex texture for save many memory in GPU
     std::array<Texture, 3> wallTex = {
@@ -220,6 +214,19 @@ int main(void)
                 render.vec.x = i * (static_cast<float>(GetScreenWidth()) / static_cast<float>(RAY_COUNT));
                 render.vec.y = (static_cast<float>(GetScreenHeight()) / 2) - (render.wallHeight / 2);
 
+                // ===== Shading Distance =====
+
+                texMap.shade = 1.0f - (render.correctedDist / MAX_DISTANCE);
+                texMap.shade = Clamp(texMap.shade, 0.2f, 1.0f);
+
+                texMap.wallColor = (Color)
+                {
+                    .r = (unsigned char)(255 * texMap.shade),
+                    .g = (unsigned char)(255 * texMap.shade),
+                    .b = (unsigned char)(255 * texMap.shade),
+                    .a = 255
+                };
+
                 // ==== Texture Mapping =====
 
                 Texture tex = wallTex[map.hitTile - 1];
@@ -255,7 +262,7 @@ int main(void)
                     texMap.dst,
                     (Vector2) {0.0f, 0.0f},
                     0.0f,
-                    WHITE
+                    texMap.wallColor
                 );
             }
         }
