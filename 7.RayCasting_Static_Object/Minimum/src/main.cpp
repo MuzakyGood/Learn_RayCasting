@@ -64,6 +64,10 @@ typedef struct RenderStaticObj
     float size;
     float screenX;
     int rayIndex;
+    float spriteLeft;
+    float spriteRight;
+    float columnWidth;
+    float texX;
 } RenderStaticObj;
 
 typedef struct RenderTextureMapping
@@ -326,34 +330,47 @@ int main(void)
             staticObj.size = static_cast<float>((GetScreenHeight() * treePot.scale) / staticObj.correctedDist);
             staticObj.screenX = static_cast<float>((staticObj.relativeAngle / (FOV / 2)) * (GetScreenWidth() / 2) + (GetScreenWidth() / 2));
 
-            staticObj.rayIndex = static_cast<int>((staticObj.screenX / (GetScreenWidth() / RAY_COUNT)));
+            staticObj.spriteLeft  = staticObj.screenX - staticObj.size / 2;
+            staticObj.spriteRight = staticObj.screenX + staticObj.size / 2;
 
-            if (staticObj.rayIndex >= 0 && staticObj.rayIndex < RAY_COUNT && staticObj.correctedDist < depthBuffer[staticObj.rayIndex])
+            staticObj.columnWidth = static_cast<float>(GetScreenWidth()) / RAY_COUNT;
+
+            for (float x = staticObj.spriteLeft; x < staticObj.spriteRight; x += staticObj.columnWidth)
             {
-                DrawTexturePro(
-                    treePot.texture,
-                    (Rectangle) 
-                    { 
-                        .x = 0.0f, 
-                        .y = 0.0f,
-                        .width = static_cast<float>(treePot.texture.width),
-                        .height = static_cast<float>(treePot.texture.height)
-                    },
-                    (Rectangle) 
+                staticObj.rayIndex = static_cast<int>(x / staticObj.columnWidth);
+                if (staticObj.rayIndex < 0 || staticObj.rayIndex >= RAY_COUNT) continue;
+
+                if (staticObj.correctedDist < depthBuffer[staticObj.rayIndex])
+                {
+                    staticObj.texX = (x - staticObj.spriteLeft) / staticObj.size;
+                    staticObj.texX = Clamp(staticObj.texX, 0.0f, 1.0f);
+
+                    Rectangle src = (Rectangle) 
                     {
-                        .x = staticObj.screenX - staticObj.size / 2,
+                        .x = staticObj.texX * treePot.texture.width,
+                        .y = 0.0f,
+                        .width = treePot.texture.width / staticObj.size,
+                        .height = static_cast<float>(treePot.texture.height)
+                    };
+
+                    Rectangle dst = (Rectangle) 
+                    {
+                        .x = x,
                         .y = (GetScreenHeight() / 2) - staticObj.size / 2,
-                        .width =  staticObj.size,
+                        .width = staticObj.columnWidth + 1,
                         .height = staticObj.size
-                    },
-                    (Vector2)
-                    { 
-                        .x = 0.0f, 
-                        .y = 0.0f 
-                    },
-                    0.0f,
-                    WHITE
-                );
+                    };
+
+                    DrawTexturePro(
+                        treePot.texture,
+                        src,
+                        dst,
+                        {0, 0},
+                        0.0f,
+                        WHITE
+                    );
+
+                }
             }
         }
 
