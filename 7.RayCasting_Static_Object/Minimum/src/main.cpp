@@ -21,12 +21,11 @@
 #define TILE_WIDTH (15)
 #define TILE_HEIGHT (10)
 
-#define PLAYER_RADIUS (12)
-
 typedef struct Player
 {
     Vector2 spawn;
     Vector2 position;
+    int radius;
     float angle;
     float speed;
     Rectangle rect;
@@ -51,6 +50,8 @@ typedef struct Render
     float correctedDist;
     float wallHeight;
     Vector2 vec;
+
+    float depthBuffer[RAY_COUNT];
 } Render;
 
 typedef struct RenderStaticObj
@@ -137,6 +138,7 @@ int main(void)
             .x = player.spawn.x * TILE_SIZE + TILE_SIZE / 2.0f,
             .y = player.spawn.y * TILE_SIZE + TILE_SIZE / 2.0f
         },
+        .radius = 12,
         .angle = 1.0f,
         .speed = 3.0f,
         .rect = {0.0f, 0.0f, 0.0f, 0.0f}
@@ -157,18 +159,17 @@ int main(void)
     {
         .position = (Vector2)
         {
-            static_cast<float>(TILE_SIZE * 4.5f), 
+            static_cast<float>(TILE_SIZE * 3.5f), 
             static_cast<float>(TILE_SIZE * 5.5f)
         },
         .texture = treePotTex,
         .scale = 90.0f,
         .radius = 20.0f
     };
-    float depthBuffer[RAY_COUNT];
 
     Tilemap map;
     Render render;
-    RenderStaticObj staticObj;
+    RenderStaticObj renderStaticObj;
     RenderTextureMapping texMap;
 
     SetTargetFPS(60);
@@ -251,7 +252,7 @@ int main(void)
             {
                 // Fish-eye correction
                 render.correctedDist = render.distance * cosf(render.rayAngle - player.angle);
-                depthBuffer[i] = render.correctedDist;
+                render.depthBuffer[i] = render.correctedDist;
 
                 render.wallHeight = static_cast<float>(GetScreenHeight() * 50) / render.correctedDist;
 
@@ -313,52 +314,52 @@ int main(void)
 
         // ===== STATIC OBJECT RENDER =====
 
-        staticObj.dx = treePot.position.x - player.position.x;
-        staticObj.dy = treePot.position.y - player.position.y;
+        renderStaticObj.dx = treePot.position.x - player.position.x;
+        renderStaticObj.dy = treePot.position.y - player.position.y;
 
-        staticObj.angleToObj = atan2f(staticObj.dy, staticObj.dx);
-        staticObj.relativeAngle = staticObj.angleToObj - player.angle;
+        renderStaticObj.angleToObj = atan2f(renderStaticObj.dy, renderStaticObj.dx);
+        renderStaticObj.relativeAngle = renderStaticObj.angleToObj - player.angle;
 
-        while (staticObj.relativeAngle > PI) staticObj.relativeAngle -= 2 * PI;
-        while (staticObj.relativeAngle < -PI) staticObj.relativeAngle += 2 * PI;
+        while (renderStaticObj.relativeAngle > PI) renderStaticObj.relativeAngle -= 2 * PI;
+        while (renderStaticObj.relativeAngle < -PI) renderStaticObj.relativeAngle += 2 * PI;
 
-        if (fabs(staticObj.relativeAngle) < FOV / 2)
+        if (fabs(renderStaticObj.relativeAngle) < FOV / 2)
         {
-            staticObj.distance = sqrtf(staticObj.dx * staticObj.dx + staticObj.dy * staticObj.dy);
-            staticObj.correctedDist = staticObj.distance * cosf(staticObj.relativeAngle);
+            renderStaticObj.distance = sqrtf(renderStaticObj.dx * renderStaticObj.dx + renderStaticObj.dy * renderStaticObj.dy);
+            renderStaticObj.correctedDist = renderStaticObj.distance * cosf(renderStaticObj.relativeAngle);
 
-            staticObj.size = static_cast<float>((GetScreenHeight() * treePot.scale) / staticObj.correctedDist);
-            staticObj.screenX = static_cast<float>((staticObj.relativeAngle / (FOV / 2)) * (GetScreenWidth() / 2) + (GetScreenWidth() / 2));
+            renderStaticObj.size = static_cast<float>((GetScreenHeight() * treePot.scale) / renderStaticObj.correctedDist);
+            renderStaticObj.screenX = static_cast<float>((renderStaticObj.relativeAngle / (FOV / 2)) * (GetScreenWidth() / 2) + (GetScreenWidth() / 2));
 
-            staticObj.spriteLeft  = staticObj.screenX - staticObj.size / 2;
-            staticObj.spriteRight = staticObj.screenX + staticObj.size / 2;
+            renderStaticObj.spriteLeft  = renderStaticObj.screenX - renderStaticObj.size / 2;
+            renderStaticObj.spriteRight = renderStaticObj.screenX + renderStaticObj.size / 2;
 
-            staticObj.columnWidth = static_cast<float>(GetScreenWidth()) / RAY_COUNT;
+            renderStaticObj.columnWidth = static_cast<float>(GetScreenWidth()) / RAY_COUNT;
 
-            for (float x = staticObj.spriteLeft; x < staticObj.spriteRight; x += staticObj.columnWidth)
+            for (float x = renderStaticObj.spriteLeft; x < renderStaticObj.spriteRight; x += renderStaticObj.columnWidth)
             {
-                staticObj.rayIndex = static_cast<int>(x / staticObj.columnWidth);
-                if (staticObj.rayIndex < 0 || staticObj.rayIndex >= RAY_COUNT) continue;
+                renderStaticObj.rayIndex = static_cast<int>(x / renderStaticObj.columnWidth);
+                if (renderStaticObj.rayIndex < 0 || renderStaticObj.rayIndex >= RAY_COUNT) continue;
 
-                if (staticObj.correctedDist < depthBuffer[staticObj.rayIndex])
+                if (renderStaticObj.correctedDist < render.depthBuffer[renderStaticObj.rayIndex])
                 {
-                    staticObj.texX = (x - staticObj.spriteLeft) / staticObj.size;
-                    staticObj.texX = Clamp(staticObj.texX, 0.0f, 1.0f);
+                    renderStaticObj.texX = (x - renderStaticObj.spriteLeft) / renderStaticObj.size;
+                    renderStaticObj.texX = Clamp(renderStaticObj.texX, 0.0f, 1.0f);
 
                     Rectangle src = (Rectangle) 
                     {
-                        .x = staticObj.texX * treePot.texture.width,
+                        .x = renderStaticObj.texX * treePot.texture.width,
                         .y = 0.0f,
-                        .width = treePot.texture.width / staticObj.size,
+                        .width = treePot.texture.width / renderStaticObj.size,
                         .height = static_cast<float>(treePot.texture.height)
                     };
 
                     Rectangle dst = (Rectangle) 
                     {
                         .x = x,
-                        .y = (GetScreenHeight() / 2) - staticObj.size / 2,
-                        .width = staticObj.columnWidth + 1,
-                        .height = staticObj.size
+                        .y = (GetScreenHeight() / 2) - renderStaticObj.size / 2,
+                        .width = renderStaticObj.columnWidth + 1,
+                        .height = renderStaticObj.size
                     };
 
                     DrawTexturePro(
@@ -419,10 +420,10 @@ Player Game::collision(Player player, Vector2 oldPosPlayer, StaticObject obj)
 {
     // ==== WorldMap Collision ====
 
-    int left   = (player.position.x - PLAYER_RADIUS) / TILE_SIZE;
-    int right  = (player.position.x + PLAYER_RADIUS) / TILE_SIZE;
-    int top    = (player.position.y - PLAYER_RADIUS) / TILE_SIZE;
-    int bottom = (player.position.y + PLAYER_RADIUS) / TILE_SIZE;
+    int left   = (player.position.x - player.radius) / TILE_SIZE;
+    int right  = (player.position.x + player.radius) / TILE_SIZE;
+    int top    = (player.position.y - player.radius) / TILE_SIZE;
+    int bottom = (player.position.y + player.radius) / TILE_SIZE;
 
     if (left < 0 || right >= TILE_WIDTH || top < 0 || bottom >= TILE_HEIGHT)
     {
@@ -442,7 +443,7 @@ Player Game::collision(Player player, Vector2 oldPosPlayer, StaticObject obj)
 
     float dist = sqrtf(dx * dx + dy * dy);
 
-    if (dist < PLAYER_RADIUS + obj.radius)
+    if (dist < player.radius + obj.radius)
     {
         player.position = oldPosPlayer;
     }
